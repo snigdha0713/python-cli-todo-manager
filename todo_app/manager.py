@@ -1,11 +1,11 @@
-"""Task operations and validation rules."""
+"""Application logic for adding, listing, completing, and removing tasks."""
 
 from .models import Task
 from .storage import JsonTaskStorage
 
 
 class TaskManager:
-    """Manage the task list independently of the command-line interface."""
+    """Coordinate task operations and persist each successful change."""
 
     MAX_TITLE_LENGTH = 100
 
@@ -14,11 +14,11 @@ class TaskManager:
         self._tasks = storage.load()
 
     def list_tasks(self) -> list[Task]:
-        """Return a copy so callers cannot change the internal list directly."""
+        """Return a copy so callers cannot modify the manager's internal list."""
         return list(self._tasks)
 
     def add_task(self, title: str) -> Task:
-        """Validate and add a task, saving it before changing in-memory data."""
+        """Validate and add a task. Returns the newly created task."""
         if not isinstance(title, str):
             raise ValueError("Task title must be text.")
 
@@ -27,49 +27,49 @@ class TaskManager:
             raise ValueError("Task title cannot be empty.")
         if len(clean_title) > self.MAX_TITLE_LENGTH:
             raise ValueError(
-                f"Task title cannot be longer than {self.MAX_TITLE_LENGTH} characters."
+                f"Task title must be {self.MAX_TITLE_LENGTH} characters or fewer."
             )
 
-        # Use the highest existing ID so removing a task does not reuse its ID.
+        # IDs are generated from the largest existing ID, not the list length,
+        # so deleting a task does not accidentally reuse an existing ID.
         next_id = max((task.task_id for task in self._tasks), default=0) + 1
-        task = Task.create(next_id, clean_title)
-        self._save_before_update([*self._tasks, task])
-        return task
+        new_task = Task.create(next_id, clean_title)
+        updated_tasks = [*self._tasks, new_task]
+        self._save_before_update(updated_tasks)
+        return new_task
 
     def mark_completed(self, task_id: int) -> bool:
-        """Mark a matching task as completed. Return False when it is not found."""
-        self._validate_id(task_id)
-        for index, task in enumerate(self._tasks):
-            if task.task_id == task_id:
-                if task.completed:
-                    return True
-                updated = list(self._tasks)
-                updated[index] = Task(
-                    task_id=task.task_id,
-                    title=task.title,
-                    completed=True,
-                    created_at=task.created_at,
-                )
-                self._save_before_update(updated)
-                return True
-        return False
+        """Mark a task as completed. Returns False when the ID is not found."""
+        self._validate_task_id(task_id)
+        if not any(task.task_id == task_id for task in self._tasks):
+            return False
+
+        updated_tasks = [
+            Task(task.task_id, task.title, True, task.created_at)
+            if task.task_id == task_id
+            else task
+            for task in self._tasks
+        ]
+        self._save_before_update(updated_tasks)
+        return True
 
     def remove_task(self, task_id: int) -> bool:
-        """Remove a task by ID. Return False when no matching task exists."""
-        self._validate_id(task_id)
-        updated = [task for task in self._tasks if task.task_id != task_id]
-        if len(updated) == len(self._tasks):
+        """Remove a task. Returns False when the ID is not found."""
+        self._validate_task_id(task_id)
+        updated_tasks = [task for task in self._tasks if task.task_id != task_id]
+        if len(updated_tasks) == len(self._tasks):
             return False
-        self._save_before_update(updated)
+
+        self._save_before_update(updated_tasks)
         return True
 
     @staticmethod
-    def _validate_id(task_id: int) -> None:
-        # bool values should not be accepted as numeric task IDs.
+    def _validate_task_id(task_id: int) -> None:
+        # Reject bool because True and False otherwise behave like 1 and 0.
         if type(task_id) is not int or task_id < 1:
             raise ValueError("Task ID must be a positive whole number.")
 
     def _save_before_update(self, updated_tasks: list[Task]) -> None:
-        """Persist first, then update memory only when saving succeeds."""
+        """Persist first; update memory only after the save succeeds."""
         self._storage.save(updated_tasks)
         self._tasks = updated_tasks
