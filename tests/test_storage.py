@@ -1,4 +1,4 @@
-"""Tests for JSON task storage and invalid saved data."""
+"""Tests for JSON task storage and corrupted-file handling."""
 
 import tempfile
 import unittest
