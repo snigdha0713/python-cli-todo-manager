@@ -69,7 +69,7 @@ class JsonTaskStorage:
                     indent=4,
                     ensure_ascii=False,
                 )
-                temporary_file.write("\\n")
+                temporary_file.write("\n")
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
 
