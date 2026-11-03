@@ -1,4 +1,4 @@
-"""Command-line menu and user interaction."""
+"""Command-line interface and application entry point."""
 
 from pathlib import Path
 
@@ -6,107 +6,116 @@ from .manager import TaskManager
 from .storage import JsonTaskStorage, StorageError
 
 
-MENU = """\nTO-DO LIST MANAGER
-1. Add a task
-2. View all tasks
-3. Mark a task as completed
-4. Remove a task
-5. Exit
-"""
+DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "tasks.json"
 
 
-def main() -> None:
-    """Start the menu and keep running until the user chooses to exit."""
-    # Keep the task file beside the project rather than depending on the terminal folder.
-    project_folder = Path(__file__).resolve().parent.parent
-    storage = JsonTaskStorage(project_folder / "data" / "tasks.json")
-
+def _read_task_id(prompt: str) -> int | None:
+    """Read a positive task ID, returning None for invalid input."""
+    raw_value = input(prompt).strip()
     try:
-        manager = TaskManager(storage)
-    except StorageError as exc:
-        print(f"Unable to load saved tasks: {exc}")
+        task_id = int(raw_value)
+    except ValueError:
+        print("Please enter a whole-number task ID, such as 1.")
+        return None
+
+    if task_id < 1:
+        print("Task ID must be greater than zero.")
+        return None
+    return task_id
+
+
+def _show_tasks(manager: TaskManager) -> None:
+    tasks = manager.list_tasks()
+    if not tasks:
+        print("\nYour task list is empty. Add a task to get started.\n")
         return
 
-    print("Welcome! Manage your tasks using the menu below.")
+    print("\nYOUR TASKS")
+    print("-" * 60)
+    for task in tasks:
+        status = "✓ Completed" if task.completed else "○ Pending"
+        print(f"[{task.task_id}] {task.title}  |  {status}")
+    print("-" * 60)
+    print(f"Total: {len(tasks)} task(s)\n")
+
+
+def _handle_add(manager: TaskManager) -> None:
+    title = input("Enter task title: ")
+    try:
+        task = manager.add_task(title)
+        print(f"Added task [{task.task_id}]: {task.title}\n")
+    except ValueError as exc:
+        print(f"Invalid task: {exc}\n")
+    except StorageError as exc:
+        print(f"Could not save the task. Your list was not changed.\nDetails: {exc}\n")
+
+
+def _handle_complete(manager: TaskManager) -> None:
+    task_id = _read_task_id("Enter the task ID to mark as completed: ")
+    if task_id is None:
+        return
+    try:
+        if manager.mark_completed(task_id):
+            print(f"Task [{task_id}] marked as completed.\n")
+        else:
+            print(f"No task found with ID {task_id}.\n")
+    except (ValueError, StorageError) as exc:
+        print(f"Could not complete the task: {exc}\n")
+
+
+def _handle_remove(manager: TaskManager) -> None:
+    task_id = _read_task_id("Enter the task ID to remove: ")
+    if task_id is None:
+        return
+    try:
+        if manager.remove_task(task_id):
+            print(f"Task [{task_id}] removed.\n")
+        else:
+            print(f"No task found with ID {task_id}.\n")
+    except (ValueError, StorageError) as exc:
+        print(f"Could not remove the task: {exc}\n")
+
+
+def run_cli(manager: TaskManager) -> None:
+    """Display the menu until the user chooses to exit."""
+    print("\nWELCOME TO THE TO-DO LIST MANAGER")
 
     while True:
-        print(MENU)
+        print("1. Add a task")
+        print("2. View all tasks")
+        print("3. Mark a task as completed")
+        print("4. Remove a task")
+        print("5. Exit")
 
         try:
             choice = input("Choose an option (1-5): ").strip()
             if choice == "1":
-                add_task(manager)
+                _handle_add(manager)
             elif choice == "2":
-                view_tasks(manager)
+                _show_tasks(manager)
             elif choice == "3":
-                complete_task(manager)
+                _handle_complete(manager)
             elif choice == "4":
-                remove_task(manager)
+                _handle_remove(manager)
             elif choice == "5":
-                print("Goodbye!")
+                print("Your tasks are saved. Goodbye!")
                 break
             else:
-                print("Please choose a number from 1 to 5.")
-        except StorageError as exc:
-            print(f"Could not save your changes: {exc}")
+                print("Invalid choice. Please enter a number from 1 to 5.\n")
         except (EOFError, KeyboardInterrupt):
-            print("\nApplication closed.")
+            # Treat Ctrl+D / Ctrl+Z and Ctrl+C as a clean exit instead of a traceback.
+            print("\nInput interrupted. Your saved tasks are safe. Goodbye!")
             break
 
 
-def add_task(manager: TaskManager) -> None:
-    """Ask for a title and add it to the list."""
-    title = input("Enter task title: ")
+def main() -> int:
+    """Create the application objects and start the CLI."""
     try:
-        task = manager.add_task(title)
-        print(f"Task added with ID {task.task_id}.")
-    except ValueError as exc:
-        print(f"Invalid task: {exc}")
+        manager = TaskManager(JsonTaskStorage(DATA_FILE))
+    except StorageError as exc:
+        print(f"Unable to start because the saved task data could not be loaded.\n{exc}")
+        print("Your saved file has not been overwritten. Check or repair it, then try again.")
+        return 1
 
-
-def view_tasks(manager: TaskManager) -> None:
-    """Display every task and its current status."""
-    tasks = manager.list_tasks()
-    if not tasks:
-        print("Your task list is empty.")
-        return
-
-    print("\nYour tasks:")
-    for task in tasks:
-        status = "Completed" if task.completed else "Pending"
-        print(f"[{task.task_id}] {task.title} - {status}")
-
-
-def complete_task(manager: TaskManager) -> None:
-    """Read an ID and mark the matching task as completed."""
-    task_id = read_task_id()
-    if task_id is None:
-        return
-    if manager.mark_completed(task_id):
-        print(f"Task {task_id} marked as completed.")
-    else:
-        print(f"No task found with ID {task_id}.")
-
-
-def remove_task(manager: TaskManager) -> None:
-    """Read an ID and remove the matching task."""
-    task_id = read_task_id()
-    if task_id is None:
-        return
-    if manager.remove_task(task_id):
-        print(f"Task {task_id} removed.")
-    else:
-        print(f"No task found with ID {task_id}.")
-
-
-def read_task_id() -> int | None:
-    """Read and validate a positive numeric ID from the user."""
-    value = input("Enter task ID: ").strip()
-    try:
-        task_id = int(value)
-        if task_id < 1:
-            raise ValueError
-        return task_id
-    except ValueError:
-        print("Please enter a positive whole-number ID.")
-        return None
+    run_cli(manager)
+    return 0
