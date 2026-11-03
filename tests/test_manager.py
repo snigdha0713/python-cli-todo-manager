@@ -1,4 +1,4 @@
-"""Tests for task creation and task-management operations."""
+"""Tests for the task-management logic."""
 
 import tempfile
 import unittest
@@ -11,8 +11,8 @@ from todo_app.storage import JsonTaskStorage
 class TaskManagerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        file_path = Path(self.temp_dir.name) / "tasks.json"
-        self.manager = TaskManager(JsonTaskStorage(file_path))
+        self.file_path = Path(self.temp_dir.name) / "tasks.json"
+        self.manager = TaskManager(JsonTaskStorage(self.file_path))
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -54,8 +54,7 @@ class TaskManagerTests(unittest.TestCase):
 
     def test_tasks_survive_application_restart(self) -> None:
         self.manager.add_task("Saved task")
-        storage = self.manager._storage
-        reopened_manager = TaskManager(storage)
+        reopened_manager = TaskManager(JsonTaskStorage(self.file_path))
         self.assertEqual(reopened_manager.list_tasks()[0].title, "Saved task")
 
     def test_invalid_task_id_is_rejected(self) -> None:
