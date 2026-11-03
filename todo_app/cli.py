@@ -50,7 +50,7 @@ def main() -> None:
         except StorageError as exc:
             print(f"Could not save your changes: {exc}")
         except (EOFError, KeyboardInterrupt):
-            print("\\nApplication closed.")
+            print("\nApplication closed.")
             break
 
 
@@ -71,7 +71,7 @@ def view_tasks(manager: TaskManager) -> None:
         print("Your task list is empty.")
         return
 
-    print("\\nYour tasks:")
+    print("\nYour tasks:")
     for task in tasks:
         status = "Completed" if task.completed else "Pending"
         print(f"[{task.task_id}] {task.title} - {status}")
