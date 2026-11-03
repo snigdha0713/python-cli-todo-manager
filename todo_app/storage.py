@@ -1,4 +1,4 @@
-"""Read and write task data in JSON format."""
+"""JSON file storage for tasks."""
 
 import json
 import os
@@ -19,7 +19,7 @@ class JsonTaskStorage:
         self.file_path = Path(file_path)
 
     def load(self) -> list[Task]:
-        """Load saved tasks. A missing file means the list is empty."""
+        """Load tasks. A missing file means the user has no saved tasks yet."""
         if not self.file_path.exists():
             return []
 
@@ -43,14 +43,18 @@ class JsonTaskStorage:
                 raise StorageError(f"Invalid task record at item {index}: {exc}") from exc
 
             if task.task_id in seen_ids:
-                raise StorageError(f"Duplicate task ID found: {task.task_id}.")
+                raise StorageError(f"Duplicate task ID found in saved data: {task.task_id}.")
             seen_ids.add(task.task_id)
             tasks.append(task)
 
         return tasks
 
     def save(self, tasks: list[Task]) -> None:
-        """Write to a temporary file before replacing the saved task file."""
+        """Save tasks atomically to reduce the risk of a partly written file.
+
+        The temporary file is created in the destination folder so os.replace
+        can perform an atomic rename on the same filesystem.
+        """
         temporary_path: Path | None = None
         try:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,7 +77,6 @@ class JsonTaskStorage:
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
 
-            # Keeping the temporary file in the same folder allows an atomic replace.
             os.replace(temporary_path, self.file_path)
             temporary_path = None
         except (OSError, TypeError, ValueError) as exc:
@@ -81,6 +84,7 @@ class JsonTaskStorage:
                 f"Could not save task data to '{self.file_path}': {exc}"
             ) from exc
         finally:
+            # Remove an abandoned temporary file after a failed save.
             if temporary_path is not None:
                 try:
                     temporary_path.unlink(missing_ok=True)
