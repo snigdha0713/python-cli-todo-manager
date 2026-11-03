@@ -31,9 +31,9 @@ def main() -> None:
 
     while True:
         print(MENU)
-        choice = input("Choose an option (1-5): ").strip()
 
         try:
+            choice = input("Choose an option (1-5): ").strip()
             if choice == "1":
                 add_task(manager)
             elif choice == "2":
